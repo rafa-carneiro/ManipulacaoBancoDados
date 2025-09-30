@@ -1,0 +1,53 @@
+---
+title: "Desafio_01"
+author: "Rafael Gomes Carneiro - RA185462"
+format: html
+editor: visual
+---
+
+## Desafio 01
+
+```{r setup}
+library(reticulate)
+library(readr) 
+library(tictoc)
+```
+
+```{r}
+tic()
+
+dados_rzip <- read_csv('../dados/flights.csv.zip')
+
+toc()
+
+tic()
+
+dados_r <- read_csv('../dados/flights.csv')
+
+toc()
+
+```
+
+```{r}
+tic()
+
+dados.r <- read.csv('../dados/flights.csv') 
+# A funcao read.csv nao le diretamente arquivos zipados, então tem que descompacta-los
+
+toc()
+```
+
+```{python}
+import time
+import pandas as pd
+
+ini = time.time()
+dados = pd.read_csv("../dados/flights.csv.zip",
+  compression="zip", 
+  header=0, sep=",", 
+  low_memory=False)
+fim = time.time()
+fim - ini
+
+
+```

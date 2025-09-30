@@ -1,0 +1,111 @@
+---
+title: "Desafio 03"
+author: "Rafael G. Carneiro - RA185462"
+format: pdf
+editor: visual
+---
+
+# Desafio 3
+
+Unicamper nasceu pra brilhar, então bora lapidar ainda mais esse brilho com um novo desafio (que poderá ser entregue até o dia 02/09 às 9:59).
+
+-   Traga um exemplo de um arquivo parquet e outro JSON
+
+-   Carregue cada um deles no R de forma que o arquivo carregado seja um data frame (ou um tsibble).
+
+-   No dia 02/09, chamarei aleatoriamente algum dos que enviaram o desafio para que expliquem em sala de aula o que fizeram (e como fizeram)
+
+-   Se alguém tiver um laudo ou uma situação na qual é melhor evitar ser chamado à frente, me avise por email\
+    \
+    Valendo 0.5 pontos extras para a P1.\
+    \
+    Carregar os dados, o qmd e arquivo explicando os dados e como lê-los, em formato PDF. 
+    
+    
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tsibble)
+  library(arrow)
+  library(jsonlite)
+}) # Não imprime os avisos de masking no documento final. 
+
+# Criar um data frame para a analise 
+df <- data.frame(
+  id = 1:10,
+  game = c("Undertale", 
+           "Katana Zero", 
+           "Hollow Knight", 
+           "Dead Cells", 
+           "Hotline Miami", 
+           "Death's Door",
+           "Cuphead",
+           "A Lenda do Herói - Edição Definitiva",
+           "Archvale",
+           "Carrion"),
+  
+  launch_date = as.Date(c("15/09/2015",
+                          "18/04/2019", 
+                          "24/02/2017", 
+                          "06/08/2018", 
+                          "23/10/2012",
+                          "20/07/2021",
+                          "29/09/2017",
+                          "30/04/2020",
+                          "02/12/2021",
+                          "23/07/2020"),
+                        format = "%d/%m/%Y"),
+  
+  metacritic_reviews = c(8.7, 
+                         8.5,
+                         9.1,
+                         8.3,
+                         8.5,
+                         8.1,
+                         8.5,
+                         7.8,
+                         7.3,
+                         7.5)
+)
+
+df <- df %>%
+  arrange(desc(metacritic_reviews)) %>%  # ordena do maior para o menor
+  mutate(id = row_number())              # redefine id como a posição
+
+
+# Definir nomes dos arquivos
+arquivo_parquet <- "game_launch.parquet"
+arquivo_json    <- "game_launch.json"
+
+# Salvar em Parquet (somente se não existir)
+if (!file.exists(arquivo_parquet)) {
+  write_parquet(df, arquivo_parquet)
+} else {
+  message("O arquivo Parquet já existe! Nenhuma ação foi tomada.")
+}
+  
+# Salvar em JSON (somente se não existir)
+if (!file.exists(arquivo_json)) {
+  write_json(df, arquivo_json, pretty = TRUE)
+} else {
+  message("O arquivo JSON já existe! Nenhuma ação foi tomada.")
+}
+
+# Essas linhas são para o código não bugar e tentar recriar os arquivos 
+# quando o arquivo roda novamente, por quais quer motivos, 
+# como conferir se está certo uma segunda vez.
+
+# Ler Parquet como um data frame
+df_parquet <- read_parquet(arquivo_parquet)
+print(df_parquet)
+
+# Ler JSON como um data frame
+df_json <- fromJSON(arquivo_json)
+print(df_json)
+
+# Se quiser transformar em tsibble
+df_tsibble <- as_tsibble(df_json, index = id)
+print(df_tsibble)
+```
+
+

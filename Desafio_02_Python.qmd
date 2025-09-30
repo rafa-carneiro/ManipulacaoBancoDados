@@ -1,0 +1,270 @@
+---
+title: "Desafio 02" 
+subtitle: "Processamento de Bases de Dados em Lote (Versão em Python)"
+author: "Rafael Gomes Carneiro - RA:185462"
+format: html
+editor: visual
+---
+
+## **Introdução**
+
+A coleta de dados em épocas mais recentes teve seu custo reduzido e volume ampliado significativamente. Redes sociais combinadas com dispositivos móveis rastreiam bilhões de pessoas no mundo, com informações das mais diversas origens: rotinas de passeio, amizades, históricos de compras, históricos de localização, fotografias geo-referenciadas, etc (FYI: com o escândalo da Cambridge Analytica, surgiram evidências de que o Facebook tenha registros de histórico de chamadas e SMS, para mensagem e ligações ocorridas fora do aplicativo Facebook, em telefones Android: <https://www.theverge.com/2018/3/25/17160944/facebook-call-history-sms-data-collection-android>). Empresas, por meio de programas de fidelidade, aprendem hábitos de compras, propensidade de compras de certos produtos dependendo de horários, produtos que são comprados juntos e informações financeiras referentes a pagamentos. Desta maneira, o volume das bases de dados cresce vertiginosamente, de modo que é necessária a mudança de paradigma na estatística moderna: os dados não mais podem trafegar até o analista de dados; a análise deve ser transportada até os dados.
+
+## **Objetivos**
+
+Ao fim deste laboratório, você deve ser capaz de:
+
+-   Importar um arquivo volumoso por partes;
+
+-   Calcular estatísticas suficientes para métrica de interesse em cada uma das partes importadas;
+
+-   Manter em memória apenas o conjunto de estatísticas suficientes e utilizar a memória remanescente para execução de cálculos;
+
+-   Combinar as estatísticas suficientes de modo a compor a métrica de interesse.
+
+## **Tarefa (retirada dos últimos slides da última aula)**
+
+Lendo 100.000 observações por vez (se você acredita que seu computador não tem memória suficiente, utilize 10.000 observações por vez), determine o percentual de vôos por Cia. Aérea que apresentou atraso na chegada (`ARRIVAL_DELAY`) superior a 10 minutos. As companhias a serem utilizadas são: AA, DL, UA e US. A estatística de interesse deve ser calculada para cada um dos dias de 2015. Para a determinação deste percentual de atrasos, apenas verbos do pacote `dplyr` e comandos de importação do pacote `readr` podem ser utilizados. Os resultados para cada Cia. Aérea devem ser apresentados em um formato de calendário.
+
+Observação: a atividade descrita no slide pede para ler apenas 100 registros por vez. Aqui, mudamos para 100 mil registros por vez, para que haja melhor aproveitamento do tempo em classe.
+
+## Pacotes Utilizados e Arquivos Baixados
+
+```{python}
+import pandas as pd
+
+# Caminho relativo
+arquivo = "../dados/flights.csv.zip"
+
+# Lendo o CSV
+df = pd.read_csv("../dados/flights.csv.zip", nrows=1000)
+print(df.head())
+
+```
+
+## **Instruções**
+
+1.  Quais são as estatísticas suficientes para a determinação do percentual de vôos atrasados na chegada (`ARRIVAL_DELAY > 10`)?
+
+    A estatíticas suficientes para determinar o percentual de vôos atrasados seriam os dados de datas: `YEAR`, `MONTH`, `DAY`. E as linhas de vôos, que seria a `AIRLINE`.
+
+2.  Crie uma função chamada `getStats` que, para um conjunto de qualquer tamanho de dados provenientes de `flights.csv.zip`, execute as seguintes tarefas (usando apenas verbos do `dplyr`):
+
+    a.  Filtre o conjunto de dados de forma que contenha apenas observações das seguintes Cias. Aéreas: AA, DL, UA e US;
+
+    b.  Remova observações que tenham valores faltantes em campos de interesse;
+
+    c.  Agrupe o conjunto de dados resultante de acordo com: dia, mês e cia. aérea;
+
+    d.  Para cada grupo em b., determine as estatísticas suficientes apontadas no item 1. e os retorne como um objeto da classe `tibble`;
+
+    e.  A função deve receber apenas dois argumentos:
+
+        1.  `input`: o conjunto de dados (referente ao lote em questão);
+
+        2.  `pos`: argumento de posicionamento de ponteiro dentro da base de dados. Apesar de existir na função, este argumento não será empregado internamente. **É importante** observar que, sem a definição deste argumento, será impossível fazer a leitura por partes.
+
+```{python}
+import pandas as pd
+
+def getStats(input_df: pd.DataFrame, pos: int):
+    """
+    Função para calcular estatísticas suficientes de atrasos (>10 min) em voos
+    para companhias AA, DL, UA e US.
+    
+    Parâmetros:
+    -----------
+    input_df : pd.DataFrame
+        Lote de dados importado (chunk do flights.csv.zip)
+    pos : int
+        Posição do lote (não utilizado internamente, mas necessário)
+    
+    Retorno:
+    --------
+    pd.DataFrame (equivalente a tibble no R)
+        Contendo ano, mês, dia, cia aérea, total de voos e número de atrasos
+    """
+    
+    # a) Filtrar apenas as companhias especificadas
+    filtro = input_df['AIRLINE'].isin(['AA', 'DL', 'UA', 'US'])
+    df = input_df.loc[filtro].copy()
+
+    # b) Remover observações com NA nos campos de interesse
+    df = df.dropna(subset=['YEAR', 'MONTH', 'DAY', 'AIRLINE', 'ARRIVAL_DELAY'])
+
+    # c) Agrupar por ano, mês, dia e companhia aérea
+    grouped = (
+        df.groupby(['YEAR', 'MONTH', 'DAY', 'AIRLINE'])
+        .agg(
+            total_flights=('ARRIVAL_DELAY', 'count'),
+            delayed_flights=('ARRIVAL_DELAY', lambda x: (x > 10).sum())
+        )
+        .reset_index()
+    )
+    
+    return grouped
+
+```
+
+3.  Utilize alguma função `readr::d_***_chunreaked` para importar o arquivo `flights.csv.zip`.
+
+    1.  Configure o tamanho do lote (chunk) para 100 mil registros;
+
+    2.  Configure a função de *callback* para instanciar DataFrames aplicando a função `getStats` criada acima;
+
+    3.  Configure o argumento `col_types` de forma que ele leia, diretamente do arquivo, apenas as colunas de interesse (veja nota de aula para identificar como realizar esta tarefa);
+
+```{python}
+# --- Caminho do arquivo ---
+arquivo = "../dados/flights.csv.zip"
+
+# --- Lista para armazenar resultados ---
+resultados = []
+
+# --- Leitura em chunks ---
+chunk_size = 100_000
+for i, chunk in enumerate(pd.read_csv(
+    arquivo,
+    usecols=['YEAR','MONTH','DAY','AIRLINE','ARRIVAL_DELAY'],  # só colunas de interesse
+    chunksize=chunk_size
+)):
+    # Processar o chunk usando getStats
+    df_chunk = getStats(chunk, i)
+    
+    # Armazenar resultado
+    resultados.append(df_chunk)
+
+# --- Concatenar todos os resultados ---
+dados_recortados = pd.concat(resultados, ignore_index=True)
+
+# --- Exibir resultado ---
+print(dados_recortados.head())
+```
+
+4.  Crie uma função chamada `computeStats` que:
+
+    1.  Combine as estatísticas suficientes para compor a métrica final de interesse (percentual de atraso por dia/mês/cia aérea);
+
+    2.  Retorne as informações em um `tibble` contendo apenas as seguintes colunas:
+
+        1.  `Cia`: sigla da companhia aérea;
+
+        2.  `Data`: data, no formato AAAA-MM-DD (dica: utilize o comando `as.Date`);
+
+        3.  `Perc`: percentual de atraso para aquela cia. aérea e data, apresentado como um número real no intervalo \[0,1\].
+
+```{python}
+import pandas as pd
+
+def computeStats(df_stats: pd.DataFrame) -> pd.DataFrame:
+    """
+    Combina as estatísticas para calcular o percentual de atraso por dia/mês/cia aérea.
+    
+    Parâmetros:
+    -----------
+    df_stats : pd.DataFrame
+        DataFrame contendo colunas: YEAR, MONTH, DAY, AIRLINE, total_flights, delayed_flights
+    
+    Retorno:
+    --------
+    pd.DataFrame com colunas: Cia, Data, Perc
+    """
+    # Criar coluna Cia (renomeando AIRLINE)
+    df_stats['Cia'] = df_stats['AIRLINE']
+    
+    # Criar coluna Data no formato AAAA-MM-DD
+    df_stats['Data'] = pd.to_datetime(
+        df_stats[['YEAR', 'MONTH', 'DAY']]
+    )
+    
+    # Calcular percentual de atraso
+    df_stats['Perc'] = df_stats['delayed_flights'] / df_stats['total_flights']
+    
+    # Selecionar apenas colunas desejadas
+    resultado = df_stats[['Cia', 'Data', 'Perc']].copy()
+    
+    return resultado
+
+# --- Exemplo de uso ---
+dados_tibble = computeStats(dados_recortados)
+print(dados_tibble.head())
+```
+
+5.  Produza um mapa de calor em formato de calendário para cada Cia. Aérea.
+
+    1.  Instale e carregue os pacotes `ggcal` e `ggplot2`.
+
+    2.  Defina uma paleta de cores em modo gradiente. Utilize o comando `scale_fill_gradient`. A cor inicial da paleta deve ser `#4575b4` e a cor final, `#d73027`. A paleta deve ser armazenada no objeto `pal`.
+
+    3.  Crie uma função chamada `baseCalendario` que recebe 2 argumentos a seguir: `stats` (`tibble` com resultados calculados na questão 4) e `cia` (sigla da Cia. Aérea de interesse). A função deverá:
+
+        1.  Criar um subconjunto de `stats` de forma a conter informações de atraso e data apenas da Cia. Aérea dada por `cia`.
+
+        2.  Para o subconjunto acima, montar a base do calendário, utilizando `ggcal(x, y)`. Nesta notação, `x` representa as datas de interesse e `y`, os percentuais de atraso para as datas descritas em `x`.
+
+        3.  Retornar para o usuário a base do calendário criada acima.
+
+    4.  Executar a função `baseCalendario` para cada uma das Cias. Aéreas e armazenar os resultados, respectivamente, nas variáveis: `cAA`, `cDL`, `cUA` e `cUS`.
+
+    5.  Para cada uma das Cias. Aéreas, apresente o mapa de calor respectivo utilizando a combinação de camadas do `ggplot2`. Lembre-se de adicionar um título utilizando o comando `ggtitle`. Por exemplo, `cXX + pal + ggtitle("Titulo")`.
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# ==================================== #
+# Função para criar matriz de calendário
+# ==================================== #
+def baseCalendario_seaborn(stats: pd.DataFrame, cia: str):
+    """
+    Cria um DataFrame para heatmap estilo calendário
+    
+    stats : pd.DataFrame com colunas ['Cia', 'Data', 'Perc']
+    cia : str, sigla da companhia aérea
+    
+    Retorna:
+    -------
+    pd.DataFrame com índice de meses e colunas de dias do mês, valores de atraso
+    """
+    # Filtrar por companhia aérea
+    df_cia = stats[stats['Cia'] == cia].copy()
+    
+    # Garantir que Data é datetime
+    df_cia['Data'] = pd.to_datetime(df_cia['Data'])
+    
+    # Extrair componentes
+    df_cia['Ano'] = df_cia['Data'].dt.year
+    df_cia['Mes'] = df_cia['Data'].dt.month
+    df_cia['Dia'] = df_cia['Data'].dt.day
+    
+    # Pivot para matriz: linhas = meses, colunas = dias
+    matriz = df_cia.pivot_table(index='Mes', columns='Dia', values='Perc', aggfunc='mean')
+    
+    return matriz
+
+# ==================================== #
+# Função para plotar o heatmap
+# ==================================== #
+def plot_calendario_seaborn(matriz, cia):
+    plt.figure(figsize=(16,6))
+    sns.heatmap(
+        matriz,
+        cmap=sns.color_palette("RdBu_r", as_cmap=True),
+        cbar_kws={'label': 'Percentual de atraso'},
+        linewidths=0.5,
+        linecolor='lightgrey'
+    )
+    plt.title(f"Mapa de calor - {cia}", fontsize=16)
+    plt.xlabel("Dia do mês")
+    plt.ylabel("Mês")
+    plt.show()
+
+# ==================================== #
+# Criar matrizes e plotar para cada Cia
+# ==================================== #
+for cia in ['AA', 'DL', 'UA', 'US']:
+    matriz = baseCalendario_seaborn(dados_tibble, cia)
+    plot_calendario_seaborn(matriz, cia)
+
+```

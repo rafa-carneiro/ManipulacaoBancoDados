@@ -1,0 +1,99 @@
+---
+title: "Laboratório Especial"
+author: "Rafael G. Carneiro - RA:185462"
+format: html
+editor: visual
+---
+
+# Laboratório Especial
+
+## Atividade
+
+Ao longo desta semana, você deverá desenvolver código em R, utilizando-se de `tidyverse`, `ggplot`, `leaftlet`, `ggcal` e outros pacotes disponibilizados em HTML Widgets para responder uma questão relacionada ao conjunto de dados flights. Para tanto, considere os seguintes fatos:
+
+-   Cias Aéreas (`AIRLINE`) possuem diferentes aeronaves (codificadas em TAIL_NUMBER);
+-   (Exemplo hipotético) No dia 01/01/2015, a aeronave N431WN viaja de BWI para JFK;
+-   (Exemplo hipotético) No dia 02/01/2015, a aeronave N431WN viaja de JFK para ORD‘;
+-   E assim sucessivamente. . .
+
+## Parte 1 - Desafio 4:
+
+Crie uma função que:
+
+-   Receba um valor de `TAIL_NUMBER` (por exemplo, `N431WN`); **(Faça com `N4XXAA`)**
+-   Produza uma tabela (tidy) com todos os trajetos realizados pela aeronave (ordenadas por data e hora, contendo todas as colunas do arquivo `flights.csv.zip`);
+-   Produza um mapa que apresente todo o trajeto voado pela aeronave ao longo de todo o ano; o trajeto deve ser apresentado de maneira linear no tempo (i.e., segue a sequência do tempo, como no exemplo hipotético dado acima);
+-   O mapa deve ser decorado com estatísticas do seu interesse (por exemplo, velocidade média do vôo como espessura da linha que conecta os aeroportos envolvidos no trajeto);
+
+```{r}
+#| label: Bibliotecas Usadas
+library(tidyverse)
+library(ggcal)
+library(leaflet)
+library(ggplot2)
+library(readr)
+library(tictoc)
+```
+
+
+
+```{r}
+tic()
+
+# Lê todos os dados 
+flights <- read_csv("dados/flights.csv.zip")
+airports <- read_csv("dados/airports.csv")
+
+toc()
+```
+
+
+```{r}
+trajeto_aeronave <- function(tail_num_escolhido) {
+  
+  # Filtra aeronave
+  df <- flights %>%
+    filter(TAIL_NUMBER == tail_num_escolhido) %>%
+    mutate(
+      DATA = make_date(YEAR, MONTH, DAY),
+      HORA = str_pad(SCHEDULED_DEPARTURE, 4, pad = "0"),
+      HORA = paste0(substr(HORA, 1, 2), ":", substr(HORA, 3, 4)),
+      DATETIME = ymd_hm(paste(DATA, HORA))
+    ) %>%
+    arrange(DATETIME) %>%
+    # Junta origem e destino
+    left_join(airports %>% select(IATA_CODE, LATITUDE, LONGITUDE),
+              by = c("ORIGIN_AIRPORT" = "IATA_CODE")) %>%
+    rename(LAT_ORIG = LATITUDE, LON_ORIG = LONGITUDE) %>%
+    left_join(airports %>% select(IATA_CODE, LATITUDE, LONGITUDE),
+              by = c("DESTINATION_AIRPORT" = "IATA_CODE")) %>%
+    rename(LAT_DEST = LATITUDE, LON_DEST = LONGITUDE) %>%
+    mutate(VELOCIDADE = DISTANCE / (AIR_TIME/60)) %>%
+    filter(!is.na(LAT_ORIG), !is.na(LON_ORIG),
+           !is.na(LAT_DEST), !is.na(LON_DEST))
+    
+  # --- Tabela tidy ---
+  print(df %>% select(DATETIME, ORIGIN_AIRPORT, DESTINATION_AIRPORT, everything()))
+  
+  # --- Mapa ---
+  mapa <- leaflet(df) %>%
+    addProviderTiles("CartoDB.Positron") %>%
+    addPolylines(
+      lng = ~c(LON_ORIG, LON_DEST),
+      lat = ~c(LAT_ORIG, LAT_DEST),
+      weight = ~scales::rescale(VELOCIDADE, to = c(1, 6)), # espessura = velocidade
+      color = "blue",
+      opacity = 0.7,
+      popup = ~paste0("Voo: ", ORIGIN_AIRPORT, " → ", DESTINATION_AIRPORT,
+                      "<br>Data: ", DATA,
+                      "<br>Velocidade média: ", round(VELOCIDADE, 1), " mph")
+    ) %>%
+    addCircleMarkers(~LON_ORIG, ~LAT_ORIG, radius = 3, color = "green", popup = ~ORIGIN_AIRPORT) %>%
+    addCircleMarkers(~LON_DEST, ~LAT_DEST, radius = 3, color = "red", popup = ~DESTINATION_AIRPORT)
+  
+  return(mapa)
+}
+
+# --- Exemplo de uso ---
+trajeto_aeronave("N4XXAA")
+```

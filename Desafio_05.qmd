@@ -1,0 +1,43 @@
+---
+title: "Desafio 05"
+author: "Rafael Gomes Carneiro - RA185462"
+format: html
+editor: visual
+---
+
+```{r}
+install.packages("RSQLite")
+```
+
+```{r}
+library(RSQLite)
+db = dbConnect(SQLite(), 'dados/disco.db')
+db
+```
+
+```{r}
+dbListTables(db)
+```
+
+```{r}
+dbListFields(db, 'albums')
+```
+
+```{r}
+album_db = dbGetQuery(db, 'SELECT * FROM albums') 
+head(album_db)
+```
+
+```{r}
+dim(album_db)
+```
+
+```{r}
+sql = 'SELECT trackid, name FROM tracks ORDER BY name'
+res = dbGetQuery(db, sql)
+head(res)
+```
+
+```{r}
+install.packages("RSQLite", repos = "https://cloud.r-project.org/")
+```

@@ -1,0 +1,255 @@
+---
+title: "Laboratório 07 - SQLite - Parte II"
+subtitle: "Desafio 08"
+author: "Rafael Gomes Carneiro - RA185462"
+format: pdf
+editor: visual
+---
+
+## **SQLite**
+
+O **SQLite** é uma biblioteca embutida em um processo único que é autônomo, não necessita de servidor e exige zero de configuração. O código é de domínio público e seu uso é gratuito em qualquer tipo de utilização. Trata-se de um sistema SQL completo, capaz de utilizar múltiplas tabelas, índices, gatilhos e visões. Ele funciona, virtualmente, em qualquer plataforme (incluindo móveis) e pesa cerca de 600KB.
+
+## **Objetivos**
+
+Ao fim deste laboratório, você deverá ser capaz de:
+
+-   Conectar-se a um banco de dados do tipo SQLite utilizando o R como interface;
+
+-   Explorar quais são as tabelas disponíveis no referido banco de dados;
+
+-   Identificar quais são as colunas de uma dada tabela existente no banco de dados;
+
+-   Realizar pesquisas simples;
+
+-   Extrair registros do banco de dados e armazená-las em objetos do R;
+
+-   Realizar algumas pesquisas complexas, utilizando `WHERE`, `INNER JOIN`.
+
+-   Criar novas tabelas no banco de dados.
+
+## **Fonte do problema:**
+
+Estes dados são de uma iniciativa de publicidade de desempenho de alunos e professores nas Universidades Americanas. A UW-Madison disponibilizou os seus dados online (no Office of the Registrar: <https://registrar.wisc.edu/>), e alguém trouxe os dados para uma competição no Kaggle (<https://www.kaggle.com/Madgrades/uw-madison-courses>). Nesta atividades, examinaremos disciplinas oferecidas no assunto de Estatística pela referida Universidade. O esquema do banco de dados é apresentado na figura abaixo.
+
+## **Observações**
+
+-   Esta tarefa não deve ser realizada no site jupyter.ime.unicamp.br ;
+
+-   Você deve realizar o download dos dados para o computador que estiver utilizando e, então, iniciar a atividade;
+
+-   Recomenda-se a utilização dos seguintes pacotes:
+
+    -   `RSQLite`
+
+-   Toda a atividade deve ser realizada utilizando-se apenas de SQLite (i.e., não utilize `dbplyr`);
+
+## **Atividade**
+
+1.  Baixe o arquivo `uwmadison.sqlite3`. Conecte-se a ele usando o pacote `RSQLite`, armazenando a conexão em uma variável `conn`.
+
+2.  Quem são e quantos são os professores que lecionaram disciplinas cujo tópico era estatística (`subjects.abbreviation='STAT'`);
+
+3.  O GPA americano é definido numa escala de 0 a 4, em que A = 4, AB = 3.5, B = 3, BC = 2.5, C = 2, D = 1 e F = 0. Determinando a nota média de cada oferecimento pela ponderação da quantidade de alunos em cada extrato com os valores numéricos de cada conceito, indique (no que se referente a disciplinas no assunto de estatística):
+
+-   Quem é o professor mais difícil?
+
+-   Quem é o professor mais fácil?
+
+-   Qual é a disciplina mais difícil?
+
+-   Qual é a disciplina mais fácil?
+
+4.  Desconecte do banco de dados.
+
+```{r}
+#| label: Bibliotecas Usadas
+#| message: false
+#| warning: false
+
+library(DBI)
+library(RSQLite)
+library(dplyr)
+```
+
+```{r}
+# caminho local do arquivo .sqlite3
+conn <- dbConnect(SQLite(), "../dados/database.sqlite3")
+
+# ver tabelas disponíveis
+dbListTables(conn) 
+```
+
+```{r}
+query <- "
+SELECT i.name AS professor
+FROM instructors i
+JOIN teachings t ON i.id = t.instructor_id
+JOIN sections s ON t.section_uuid = s.uuid
+JOIN course_offerings co ON s.course_offering_uuid = co.uuid
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects sub ON sm.subject_code = sub.code
+WHERE sub.abbreviation = 'STAT'
+GROUP BY i.id, i.name
+ORDER BY i.name
+"
+
+# Executar a consulta
+professores_stat <- dbGetQuery(conn, query)
+
+# Mostrar os nomes
+professores_stat
+
+# Contar quantos professores distintos
+n_professores <- nrow(professores_stat)
+n_professores
+
+```
+
+```{r}
+query_gpa_prof <- "
+SELECT
+    i.name AS professor,
+    SUM(
+        (a_count * 4.0) +
+        (ab_count * 3.5) +
+        (b_count * 3.0) +
+        (bc_count * 2.5) +
+        (c_count * 2.0) +
+        (d_count * 1.0) +
+        (f_count * 0.0)
+    ) * 1.0 /
+    SUM(
+        a_count + ab_count + b_count + bc_count + c_count + d_count + f_count
+    ) AS gpa_medio
+FROM grade_distributions g
+JOIN sections s ON g.section_number = s.number AND g.course_offering_uuid = s.course_offering_uuid
+JOIN course_offerings co ON s.course_offering_uuid = co.uuid
+JOIN teachings t ON s.uuid = t.section_uuid
+JOIN instructors i ON t.instructor_id = i.id
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects sub ON sm.subject_code = sub.code
+WHERE sub.abbreviation = 'STAT'
+GROUP BY i.name
+HAVING SUM(a_count + ab_count + b_count + bc_count + c_count + d_count + f_count) > 0
+ORDER BY gpa_medio ASC
+LIMIT 1
+"
+
+# GPA médio ponderado do professor mais difícil
+professor_mais_dificil <- dbGetQuery(conn, query_gpa_prof)
+
+professor_mais_dificil
+```
+
+```{r}
+query_gpa_facil <- "
+SELECT
+    i.name AS professor,
+    SUM(
+        (a_count * 4.0) +
+        (ab_count * 3.5) +
+        (b_count * 3.0) +
+        (bc_count * 2.5) +
+        (c_count * 2.0) +
+        (d_count * 1.0) +
+        (f_count * 0.0)
+    ) * 1.0 /
+    SUM(
+        a_count + ab_count + b_count + bc_count + c_count + d_count + f_count
+    ) AS gpa_medio
+FROM grade_distributions g
+JOIN sections s ON g.section_number = s.number AND g.course_offering_uuid = s.course_offering_uuid
+JOIN course_offerings co ON s.course_offering_uuid = co.uuid
+JOIN teachings t ON s.uuid = t.section_uuid
+JOIN instructors i ON t.instructor_id = i.id
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects sub ON sm.subject_code = sub.code
+WHERE sub.abbreviation = 'STAT'
+GROUP BY i.name
+HAVING SUM(a_count + ab_count + b_count + bc_count + c_count + d_count + f_count) > 0
+ORDER BY gpa_medio DESC
+LIMIT 1
+"
+
+# GPA médio ponderado do professor mais fácil
+professor_mais_facil <- dbGetQuery(conn, query_gpa_facil)
+
+professor_mais_facil
+
+```
+
+```{r}
+query_gpa_disciplina <- "
+SELECT
+    c.name AS course_name,
+    SUM(
+        (a_count * 4.0) +
+        (ab_count * 3.5) +
+        (b_count * 3.0) +
+        (bc_count * 2.5) +
+        (c_count * 2.0) +
+        (d_count * 1.0) +
+        (f_count * 0.0)
+    ) * 1.0 /
+    SUM(
+        a_count + ab_count + b_count + bc_count + c_count + d_count + f_count
+    ) AS gpa_medio
+FROM grade_distributions g
+JOIN sections s ON g.section_number = s.number AND g.course_offering_uuid = s.course_offering_uuid
+JOIN course_offerings co ON s.course_offering_uuid = co.uuid
+JOIN courses c ON co.course_uuid = c.uuid
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects sub ON sm.subject_code = sub.code
+WHERE sub.abbreviation = 'STAT'
+GROUP BY c.name
+HAVING SUM(a_count + ab_count + b_count + bc_count + c_count + d_count + f_count) > 0
+ORDER BY gpa_medio ASC
+LIMIT 1
+"
+
+# GPA médio ponderado da disciplina mais difícil
+disciplina_mais_dificil <- dbGetQuery(conn, query_gpa_disciplina)
+
+disciplina_mais_dificil
+
+```
+
+```{r}
+query_gpa_disciplina_facil <- "
+SELECT
+    c.name AS course_name,
+    SUM(
+        (a_count * 4.0) +
+        (ab_count * 3.5) +
+        (b_count * 3.0) +
+        (bc_count * 2.5) +
+        (c_count * 2.0) +
+        (d_count * 1.0) +
+        (f_count * 0.0)
+    ) * 1.0 /
+    SUM(
+        a_count + ab_count + b_count + bc_count + c_count + d_count + f_count
+    ) AS gpa_medio
+FROM grade_distributions g
+JOIN sections s ON g.section_number = s.number AND g.course_offering_uuid = s.course_offering_uuid
+JOIN course_offerings co ON s.course_offering_uuid = co.uuid
+JOIN courses c ON co.course_uuid = c.uuid
+JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+JOIN subjects sub ON sm.subject_code = sub.code
+WHERE sub.abbreviation = 'STAT'
+GROUP BY c.name
+HAVING SUM(a_count + ab_count + b_count + bc_count + c_count + d_count + f_count) > 0
+ORDER BY gpa_medio DESC
+LIMIT 1
+"
+
+# GPA médio ponderado da disciplina mais fácil
+disciplina_mais_facil <- dbGetQuery(conn, query_gpa_disciplina_facil)
+
+disciplina_mais_facil
+```
+
+```{r}
+dbDisconnect(conn)
+```
