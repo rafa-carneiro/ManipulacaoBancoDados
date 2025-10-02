@@ -1,0 +1,276 @@
+---
+title: "Desafio 10"
+author: "Rafael Gomes Carneiro"
+format: html
+editor: visual
+---
+
+```{r}
+library(reticulate)
+
+# Caminho completo do Python 3.12
+use_python("C:/Users/rafa3/AppData/Local/Programs/Python/Python312/python.exe", 
+           required = TRUE)
+
+# Verifica versão
+py_config()
+
+# Tem que utilizar o Python 3.12
+```
+
+```{r}
+#| label: Horario
+
+# Função para converter Sys.time() em horário legível
+horario_normal <- function(timestamp = Sys.time()) {
+  format(timestamp, "%d/%m/%Y %H:%M:%S")
+}
+
+cat("Arquivo compilado em:", horario_normal(), "\n")
+```
+
+```{python setup}
+#| label: Bibliotecas Usadas
+
+
+# !pip install polars
+# !pip install fastexcel
+# !pip install pyarrow
+
+import polars as pl
+import fastexcel as fx
+import pyarrow
+```
+
+```{python} 
+# Codigo para a leitura de dados em csv
+aeroportos = pl.read_csv("../dados/airports.csv",
+                         columns = ["IATA_CODE", "CITY", "STATE"])
+aeroportos.head(2)
+```
+
+```{python}
+# Codigo para a leitura de dados em .xlsx
+wdi = pl.read_excel("../dados/WDIEXCEL.xlsx", sheet_name = "Country",
+                    columns = ["Short Name", "Region"])
+wdi.head(2)
+```
+
+```{python}
+# Exemplo de criacao de um data frame
+df = pl.DataFrame({
+    "grupo": ["A", "A", "B", "B", "C"],
+    "valor1": [10, 15, 10, None, 25],
+    "valor2": [5, None, 20, 30, None]
+})
+df
+```
+
+```{python}
+# Acessando uma coluna do dataframe
+df["valor1"]
+```
+
+```{python}
+# Acessando o valor de media de uma coluna do dataframe
+df["valor1"].mean()
+```
+
+```{python}
+# Remocao de valores faltantes na coluna
+df["valor1"].drop_nulls()
+```
+
+```{python}
+# Remocao de valores faltantes na operacao da media
+df["valor1"].drop_nulls().mean()
+```
+
+```{python}
+# Cria um novo dataframe adicionado os valores de medias das colunas Valor1 e Valor2
+df.select([
+  pl.col("valor1").mean().alias("media_v1"),
+  pl.col("valor2").mean()
+])
+```
+
+```{python}
+# Agrupa o dataframe pelos "grupos" e depois vai fazer aulgumas agregacoes para cada grupo.
+# Vai agregar a media da coluna valor1 e vai adicionar o minimo da coluna valor2.
+# Por fim, ordena tudo no final.
+df.group_by("grupo").agg([
+  pl.col("valor1").mean().alias("media_valor1"),
+  pl.col("valor2").min().alias("min_valor2")
+]).sort("grupo") 
+```
+
+```{python}
+# Faz a leitura do arquivo de dados, somente lendo 3 colunas desejadas.
+# Depois com o `schema_overrides` forca tipos especificos para cada coluna.
+
+
+voos = pl.read_csv("../dados/flights.csv",
+                   columns = ["AIRLINE", "ARRIVAL_DELAY", "DESTINATION_AIRPORT"],
+                   schema_overrides = {"AIRLINE": pl.Utf8,
+                             "ARRIVAL_DELAY": pl.Int32,
+                             "DESTINATION_AIRPORT": pl.Utf8})
+voos.shape # Printa a dimensao do data frame
+```
+
+```{python}
+voos.head(3) # Printa as primeiras 3 linhas do data frame
+```
+
+```{python}
+resultado = (
+  voos.drop_nulls(["AIRLINE", "DESTINATION_AIRPORT", "ARRIVAL_DELAY"])
+  # Exlui todos os valores faltantes/NULL's
+  .filter( 
+    pl.col("AIRLINE").is_in(["AA", "DL"]) & # Filtra somente duas linhas aerias desejadas
+    pl.col("DESTINATION_AIRPORT").is_in(["SEA", "MIA", "BWI"]) 
+    # Filtra somente 3 aeroportos destinados desejadas
+    )
+    .group_by(["AIRLINE", "DESTINATION_AIRPORT"]) # Agrupa os pares (aerolinhas, destino)
+    .agg([
+      # agrega para cada grupo um falor booleano para se houve ou nao atrasos de mais de 30 minutos
+      (pl.col("ARRIVAL_DELAY") > 30).mean().alias("atraso_medio")
+      ])
+)
+```
+
+```{python}
+# Ordena o dataframe pelo resultados pelos atrasos.
+resultado.sort("atraso_medio")
+```
+
+```{python}
+# Criando DataFrames para os clientes
+clientes = pl.DataFrame({
+    "cliente_id": [1, 2, 3, 4],
+    "nome": ["Ana", "Bruno", "Clara", "Daniel"]
+})
+
+print(clientes)
+```
+
+```{python}
+# Criando DataFrames para os pedidos dos clientes
+pedidos = pl.DataFrame({
+    "pedido_id": [101, 102, 103, 104, 105],
+    "cliente_id": [1, 2, 3, 1, 5],
+    "valor": [100.50, 250.75, 75.00, 130.00, 79.00]
+})
+
+print(pedidos)
+```
+
+```{python}
+# Faz a juncao de dos pedidos de acordo com cada cliente, 
+# apenas mantendo as linhas que tem correspondencia.
+res_ij = clientes.join(pedidos, on="cliente_id", how="inner")
+print(res_ij)
+```
+
+```{python}
+# Faz a juncao de dos pedidos de acordo com cada cliente, 
+# mantendo todas as linhas do dataframe da esquerda
+res_lj = clientes.join(pedidos, on="cliente_id", how="left")
+print(res_lj)
+```
+
+```{python}
+# Faz a juncao de dos pedidos de acordo com cada cliente, 
+# mantendo todas as linhas do dataframe da direita
+res_rj = clientes.join(pedidos, on="cliente_id", how="right")
+print(res_rj)
+```
+
+```{python}
+# Faz a juncao de dos pedidos de acordo com cada cliente, 
+# mantendo todas as linhas dos dois dataframes
+res_oj = clientes.join(pedidos, on="cliente_id", how="full")
+print(res_oj)
+```
+
+```{python}
+# Cada linha de clientes será combinada com todas as linhas de pedidos.
+res_cj = clientes.join(pedidos, how="cross")
+print(res_cj)
+```
+
+```
+P1: Qual é o valor médio das compras realizadas para cada cliente identificado?
+```
+
+```{python}
+# Printa  a tabela de clientes
+print(clientes)
+
+# Printa  a tabela de pedidos
+print(pedidos)
+```
+
+```{python}
+# Agrupa o par (nomes id dos clientes) e agrega o valor da media de cada valor da coluna valor1
+res = res_ij.group_by(["nome", "cliente_id"]).agg(pl.col("valor").mean())
+print(res)
+```
+
+```
+P2: Informe os nomes e a quantidade de compras com valor mínimo de $100.00 realizadas por cada cliente.
+```
+
+```{python}
+# Printa  a tabela de clientes
+print(clientes)
+
+# Printa  a tabela de pedidos
+print(pedidos)
+```
+
+```{python}
+
+
+res = (res_oj.with_columns(pl.col("valor") > 100)
+      # Cira uma nova coluna com valores booleanos respeitando se são 
+      # menores (TRUE) ou maiores (FALSE) que 100
+       .group_by("nome") # Agrupa pelo nome
+       .agg(pl.col("valor").sum())) # Agrega o valor da somatoria dos valores booleanos
+print(res)
+```
+
+```{python}
+# Cria um datafreme com os dados de vendas
+vendas = pl.DataFrame({
+    "id_venda": [1, 2, 3],
+    "id_cl": [1, 2, 1],
+    "id_prod": [101, 102, 103],
+    "qtde": [2, 1, 1]
+})
+
+# Cria um datafreme com os dados dos pedidos
+detalhes_pedidos = pl.DataFrame({
+    "id_ped": [201, 202, 203],
+    "cl_id": [1, 2, 1],
+    "id_prod": [101, 102, 104],
+    "valor": [50.00, 75.00, 100.00]
+})
+```
+
+```{python}
+print(vendas) # Printa a tabela de vendas 
+```
+
+```{python}
+print(detalhes_pedidos) # Printa a tabela de pedidos 
+```
+
+```{python}
+# Junta as tabelas de vendas e detalhes dos pedidos juntando valores em especicos de cada tabela, 
+# Alem de apenas manter as linhas que tem correspondencia.
+final = vendas.join(detalhes_pedidos,
+                    left_on = ["id_cl", "id_prod"],
+                    right_on = ["cl_id", "id_prod"],
+                    how = "inner")
+print(final)
+```
