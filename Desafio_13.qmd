@@ -1,0 +1,229 @@
+---
+title: "Desafio 13"
+author: "Rafael Gomes Carneiro - RA185462"
+format: html
+editor: source
+---
+
+# **Laboratório 3: SQLite com Polars**
+
+Author: Benilton S Carvalho
+
+## **Objetivo**
+
+Dados relacionais são uma constante no exercício da profissão do estatístico. Esta estratégia permite uma representação mais efetiva de dados estruturados, oferecendo a possibilidade de análises computacionalmente mais eficientes. Neste laboratório, trabalharemos com dados relacionais a partir de uma base de dados SQLite.
+
+## **Os Dados**
+
+O banco de dados para esta atividade é o “IMDb Movie Data”, que possui informações sobre filmes, atores, diretores, gêneros e outros. Para os arquivos indicados abaixo, considere que o símbolo `\N` representa valores faltantes. Observe com cuidado a extensão dos arquivos para uma indicação do formato do mesmo.
+
+### **1. `title.basics0.tsv.gz` (Informações Básicas dos Filmes)**
+
+-   Link: <https://drive.google.com/file/d/1iYqAGTtIhRLK4ycFK41hYaWK3iKfOdT2/view?usp=sharing>
+
+| Coluna           | Descrição                                          |
+|------------------|----------------------------------------------------|
+| `tconst`         | Identificador único do título (ex: tt1234567)      |
+| `titleType`      | Tipo do título (ex: movie, short, tvSeries)        |
+| `primaryTitle`   | Título principal                                   |
+| `originalTitle`  | Título original                                    |
+| `isAdult`        | Indica se é conteúdo adulto (0: não, 1: sim)       |
+| `startYear`      | Ano de lançamento/início                           |
+| `endYear`        | Ano de término (para séries)                       |
+| `runtimeMinutes` | Duração em minutos                                 |
+| `genres`         | Gêneros separados por vírgula (ex: Action, Comedy) |
+
+### **2. `title.ratings.tsv.gz` (Avaliações dos Filmes)**
+
+-   Link: <https://drive.google.com/file/d/1kZuj1lnXkPrNURzwYuc4FXTM7Pvknr3o/view?usp=sharing>
+
+| Coluna          | Descrição                                     |
+|-----------------|-----------------------------------------------|
+| `tconst`        | Identificador único do título (ex: tt1234567) |
+| `averageRating` | Nota média dos usuários (escala de 1 a 10)    |
+| `numVotes`      | Número de votos recebidos                     |
+
+### **3. `title.principals0.tsv.gz` (Elenco e Equipe Técnica)**
+
+-   Link: <https://drive.google.com/file/d/1oLR2_mFyRHEiKlqFKt4QDVYlGH8LC4mn/view?usp=sharing>
+
+| Coluna       | Descrição                                             |
+|--------------|-------------------------------------------------------|
+| `tconst`     | Identificador único do título (ex: tt1234567)         |
+| `nconst`     | Identificador único da pessoa (ex: nm1234567)         |
+| `category`   | Categoria de trabalho da pessoa (ex: actor, director) |
+| `job`        | Função específica desempenhada (para não-atores)      |
+| `characters` | Personagens interpretados (para atores)               |
+
+### **4. `movies.sqlite3` (Banco de Dados em SQLite)**
+
+-   Link: <https://drive.google.com/file/d/1l-rnMw2bsmbZ-e5h9SGydqGmv9fNAtWs/view?usp=sharing>
+
+## **Atividade**
+
+1.  Crie um banco de dados SQLite utilizando os 3 arquivos acima. O banco de dados deve conter as seguintes tabelas: `basics`, `ratings` e `principals`
+
+2.  (**Utilizando SQL**, responda): Quais são os 5 filmes com as maiores notas (`averageRating`)? Apresente uma solução capaz de desempatar os filmes baseando-se no número de votos recebidos.
+
+3.  (**Utilizando SQL**, responda): Qual é o gênero mais frequente entre os filmes com nota maior que 8?
+
+4.  (**Utilizando SQL**, responda): Quais são os 3 atores/atrizes que mais participaram de filmes com nota maior que 7.5?
+
+```{r setup}
+#| label: Bibliotecas usadas
+#| message: false
+
+library(readr)
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(tictoc)
+```
+
+```{r}
+
+```
+
+
+```{r}
+#| label: Lendo Planilhas
+
+# Planilhas basics0
+basics <- read_tsv("../dados/title.basics0.tsv.gz",
+                   na = "\\N",
+                   show_col_types = FALSE)
+
+# Planilhas ratings
+ratings <- read_tsv("../dados/title.ratings.tsv.gz",
+                    na = "\\N",
+                    show_col_types = FALSE)
+
+# Planilhas principals0 
+#principals <- read_tsv("../dados/title.principals0.tsv.gz",
+                       #na = "\\N",
+                       #show_col_types = FALSE)
+
+salva_chunk <- function(x, pos) {
+  dbWriteTable(con, "principals", x, append = TRUE)
+}
+
+# Lê e grava em blocos de 100 mil linhas
+read_tsv_chunked(
+  file = "../dados/title.principals0.tsv.gz",
+  callback = SideEffectChunkCallback$new(salva_chunk),
+  chunk_size = 100000,
+  na = "\\N",
+  show_col_types = FALSE
+)
+
+
+# Visualizando as Planilhas
+head(basics)
+head(ratings)
+head(principals)
+```
+
+```{r}
+# Criação da conexão
+con <- dbConnect(RSQLite::SQLite(), "movies.sqlite3")
+
+# Escrita das tabelas
+dbWriteTable(con, "basics", basics, overwrite = TRUE)
+dbWriteTable(con, "ratings", ratings, overwrite = TRUE)
+dbWriteTable(con, "principals", principals, overwrite = TRUE)
+
+# Checar tabelas
+dbListTables(con)
+```
+    ```
+    Quais são os 5 filmes com as maiores notas (averageRating)?
+    ```
+
+
+```{r}
+query1 <- "
+SELECT b.primaryTitle,
+       r.averageRating,
+       r.numVotes
+FROM ratings r
+JOIN basics b ON b.tconst = r.tconst
+WHERE b.titleType = 'movie'
+ORDER BY r.averageRating DESC, r.numVotes DESC
+LIMIT 5;
+"
+
+top5_filmes <- dbGetQuery(con, query1)
+top5_filmes
+```
+
+    ```
+    Qual é o gênero mais frequente entre os filmes com nota maior que 8?
+    ```
+
+```{r}
+query2 <- '
+WITH filmes_bons AS (
+  SELECT b.tconst, b.genres
+  FROM basics b
+  JOIN ratings r ON b.tconst = r.tconst
+  WHERE r.averageRating > 8
+),
+generos AS (
+  SELECT TRIM(value) AS genero
+  FROM filmes_bons,
+       json_each(\'["\' || REPLACE(genres, \',\', \'","\') || \'"]\')
+)
+SELECT genero, COUNT(*) AS qtd
+FROM generos
+GROUP BY genero
+ORDER BY qtd DESC
+LIMIT 1;
+'
+
+genero_top <- dbGetQuery(con, query2)
+genero_top
+
+```
+
+
+```
+Quais são os 3 atores/atrizes que mais participaram de filmes com nota maior que 7.5?
+```
+
+```{r}
+query3 <- "
+SELECT p.nconst,
+       COUNT(*) AS num_filmes
+FROM principals p
+JOIN ratings r ON p.tconst = r.tconst
+JOIN basics b ON b.tconst = p.tconst
+WHERE p.category IN ('actor', 'actress')
+  AND b.titleType = 'movie'
+  AND r.averageRating > 7.5
+GROUP BY p.nconst
+ORDER BY num_filmes DESC
+LIMIT 3;
+"
+
+atores_top <- dbGetQuery(con, query3)
+atores_top
+```
+
+```{r}
+dbDisconnect(con)
+```
+
+
+
+```{r}
+#| label: Horario
+
+# Função para converter Sys.time() em horário legível
+horario_normal <- function(timestamp = Sys.time()) {
+  format(timestamp, "%d/%m/%Y %H:%M:%S")
+}
+
+cat("Arquivo compilado em:", horario_normal(), "\n")
+```
+```
+

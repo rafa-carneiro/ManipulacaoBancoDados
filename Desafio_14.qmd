@@ -1,0 +1,185 @@
+---
+title: "Desafio 14"
+author: "Rafael G. Carneiro - RA185462"
+  pdf:
+    pdf-engine: lualatex
+editor: visual
+---
+
+```{r}
+#| label: Maquina Virtual
+
+
+library(reticulate)
+
+# Criar novo ambiente especificando a versão do Python
+virtualenv_create("ambiente_desafio")
+
+# Ativar
+use_virtualenv("ambiente_desafio")
+
+py_install("datetime")
+py_install("pandas")
+py_install("plotnine")
+
+```
+
+
+```{python}
+from datetime import datetime
+
+def horario_normal(timestamp=None):
+    if timestamp is None:
+        timestamp = datetime.now()
+    return timestamp.strftime("%d/%m/%Y %H:%M:%S")
+
+print("Arquivo compilado em:", horario_normal())
+```
+
+1. Importe o conjunto de dados diamonds, cujo arquivo está disponível no website da disciplina.
+
+
+```{python}
+#| label: Bibliotecas usadas
+
+import pandas as pd
+from plotnine.data import diamonds
+from plotnine import ggplot, aes, geom_bin2d, scale_fill_gradient, theme_bw, labs, facet_wrap
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+```
+
+2. Crie uma visualização de dados que descreva a associação existente entre as variáveis peso (carat) e preço (price). Que ações você tomou para garantir que você produziu um gráfico de boa qualidade? Escreva um parágrafo comunicando os seus achados.
+
+
+
+```{python}
+#| label: Criando graficos
+
+PlotHeat = (
+    ggplot(diamonds)
+    + aes(x='carat', y='price')
+    + geom_bin2d()
+    + scale_fill_gradient(low='lightblue', high='darkblue')
+    + theme_bw()
+    + labs(
+        title='Mapa de Calor: Relação entre Peso e Preço',
+        x='Peso (quilates)',
+        y='Preço (USD)',
+        fill='Contagem'
+    )
+)
+
+PlotHeat.save("GraficoTotal.png", dpi=600)
+
+PlotHeatCut = (
+    ggplot(diamonds)
+    + aes(x='carat', y='price')
+    + geom_bin2d()
+    + facet_wrap('~cut')
+    + scale_fill_gradient(low='lightblue', high='darkblue')  # <- substitui o viridis
+    + theme_bw()
+    + labs(
+        title='Mapa de Calor: Relação entre Peso e Preço por Tipo de Corte',
+        x='Peso (carat)',
+        y='Preço (USD)',
+        fill='Contagem'
+    )
+)
+
+PlotHeatCut.save("GraficoCut.png", dpi=600)
+
+PlotHeatClarity = (
+    ggplot(diamonds)
+    + aes(x='carat', y='price')
+    + geom_bin2d()  # divide em quadrados e conta os pontos
+    + facet_wrap('~clarity')
+    + scale_fill_gradient(low='lightblue', high='darkblue')
+    + labs(
+        title='Mapa de Calor: Relação de Diamantes por Peso e Preço\n\nDivisão por Claridade',
+        x='Peso (carat)',
+        y='Preço (USD)',
+        fill='Quantidade'
+    )
+)
+
+PlotHeatClarity.save("GraficoClarity.png", dpi=600)
+
+PlotHeatColor = (
+    ggplot(diamonds)
+    + aes(x='carat', y='price')
+    + geom_bin2d()  
+    + facet_wrap('~color')
+    + scale_fill_gradient(low='lightblue', high='darkblue')
+    + labs(
+        title='Mapa de Calor: Diamantes: Relação Peso vs Preço \n\n Divisão por Cor',
+        x='Peso (carat)',
+        y='Preço (USD)',
+        fill='Quantidade'
+    )
+)
+
+PlotHeatColor.save("GraficoColor.png", dpi=600)
+```
+
+```
+Que ações você tomou para garantir que você produziu um gráfico de boa qualidade? Escreva um parágrafo comunicando os seus achados.
+```
+
+```{python}
+ImgTotal = mpimg.imread("GraficoTotal.png")
+plt.imshow(ImgTotal) 
+plt.axis("off")
+plt.show()
+```
+ 
+O que primeiro foi identificado foi o necessidade achar um estilo de gráfico que mostra bem a diferença de quantidade de dados em uma area. Como por exemplo, sem nenhuma alteração na escalas dos dados, um gráfico de box-plot fica inviavel pela grande distorção que pela qunatidade de outliers que geraria. 
+Logo em seguida, utilizei a função `geom_bin2d` que divide o grafico com um mapa cartesiano, conta a quantidade de pontos presentes e define a escala pela quantidade de ponto dentro de cada bloco. 
+Depois fora somente definir a escala de cor,  e as legendas. 
+ 
+
+```{python}
+ImgCut = mpimg.imread("GraficoCut.png")
+plt.imshow(ImgCut) 
+plt.axis("off")
+plt.show()
+
+```
+
+3. A relação identificada na questão anterior é a mesma relação presente nos diferentes cortes de diamantes? Crie uma visualização que demonstre seus achados eficientemente. Descreva sua conclusão em um parágrafo.
+
+
+ 
+Com a visualização dos gráficos divididos por outras categorias, conseguimos visualizar muito bem que, apesar de existir um pequena relação entre peso e preço, ela não é a pricipal distinção de valor atribuido a um diamante. Como mostrado no grafico de cortes, um melhor corte consegue atribuir mais valor ao diamante. Há uma maior quantidade de diamentes mais caros com o melhor corte, ideal, do que o com o pior corte, Fair. 
+ 
+
+
+```{python}
+ImgColor = mpimg.imread("GraficoColor.png")
+plt.imshow(ImgColor) 
+plt.axis("off")
+plt.show()
+```
+
+
+
+```{python}
+ImgClarity = mpimg.imread("GraficoClarity.png")
+plt.imshow(ImgClarity) 
+plt.axis("off")
+plt.show()
+```
+
+
+4. Crie uma visualização que mostre a relação entre preço e peso do diamante, considerando as diferentes combinações de qualidade de corte, cor e clareza do diamante. Quais foram as dificuldades encontradas? A relação entre preço e peso é a mesma para diferentes configurações de diamantes?
+
+
+
+ 
+Como vemos nos diversos gráficos, é perceptivel uma diferença entre as categorias. E essas diferenças aparentam ter uma maior relação de valorização dos diamantes do que necessariamente o pesso bruto dele. 
+
+Vemos no grafico da clareza, que os piores claridades (I1) tem que compensarem seu valor com o peso dos diamantes para conseguir uma maior valorização. Já em comparação com os de melhor claridade (IF) normalmente tende a depender menos do peso para uma melhor valorização. 
+
+E essa mesma analogia é valida se formos comparar a partir da cor do diamante, apesar de ser menos discrepante em relação a clareza.  
+ 
+
